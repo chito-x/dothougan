@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ドット方眼 — ファミコン用タイルエディタ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=M+PLUS+1p:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF3F6; --grid:#C7DCE8; --grid-strong:#9DBFD3; --ink:#1E2C4A; --ink-soft:#4F6280;
+  --pencil:#C8372D; --panel:#F7FAFC; --line:#B7CCDA; --sel:#C8372D; --btn:#FFFFFF; --btn-on:#1E2C4A; --btn-on-ink:#F7FAFC;
+  --checker-a:#D9E4EC; --checker-b:#EEF3F6;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#10202F; --grid:#1D3549; --grid-strong:#2C4D66; --ink:#E3ECF3; --ink-soft:#9DB2C4;
+    --pencil:#F06A5E; --panel:#162A3C; --line:#2C4D66; --sel:#F06A5E; --btn:#1B3247; --btn-on:#E3ECF3; --btn-on-ink:#10202F;
+    --checker-a:#1B3247; --checker-b:#132638;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10202F; --grid:#1D3549; --grid-strong:#2C4D66; --ink:#E3ECF3; --ink-soft:#9DB2C4;
+  --pencil:#F06A5E; --panel:#162A3C; --line:#2C4D66; --sel:#F06A5E; --btn:#1B3247; --btn-on:#E3ECF3; --btn-on-ink:#10202F;
+  --checker-a:#1B3247; --checker-b:#132638;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0; color:var(--ink); font-family:"M PLUS 1p","Hiragino Sans","Noto Sans JP",system-ui,sans-serif; font-size:15px; line-height:1.6;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-strong) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:80px 80px,80px 80px,10px 10px,10px 10px;
+}
+.dot{font-family:"DotGothic16","M PLUS 1p",monospace}
+header{max-width:1180px;margin:0 auto;padding:18px 16px 6px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font-family:"DotGothic16",monospace;font-weight:400;font-size:clamp(26px,5vw,38px);margin:0;letter-spacing:.04em;line-height:1.1}
+header p{margin:0;color:var(--ink-soft);font-size:14px}
+main{max-width:1180px;margin:0 auto;padding:8px 16px 40px;display:grid;gap:18px;grid-template-columns:1fr}
+@media (min-width:920px){ main{grid-template-columns:minmax(360px,540px) 1fr;align-items:start} }
+.sheet{background:var(--panel);border:1px solid var(--line);padding:14px;border-radius:2px;box-shadow:3px 3px 0 var(--grid-strong)}
+h2{font-family:"DotGothic16",monospace;font-weight:400;font-size:18px;margin:0 0 8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button,select,label.filebtn{
+  font:inherit;font-size:14px;color:var(--ink);background:var(--btn);border:1px solid var(--line);border-radius:2px;
+  padding:6px 10px;min-height:36px;cursor:pointer;
+}
+button:hover,label.filebtn:hover{border-color:var(--ink-soft)}
+button:focus-visible,select:focus-visible,label.filebtn:focus-within,canvas:focus-visible{outline:2px solid var(--pencil);outline-offset:2px}
+button[aria-pressed="true"]{background:var(--btn-on);color:var(--btn-on-ink);border-color:var(--btn-on)}
+button.danger.armed{background:var(--pencil);color:#fff;border-color:var(--pencil)}
+kbd{font-family:"DotGothic16",monospace;font-size:11px;opacity:.65;margin-left:4px}
+#editWrap{position:relative;width:100%;aspect-ratio:1/1;margin:10px 0;
+  background:repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0/16px 16px;border:2px solid var(--ink)}
+#edit{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.inks{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 10px}
+.ink{position:relative;height:56px;border:2px solid var(--line);border-radius:2px;cursor:pointer;padding:0}
+.ink[aria-pressed="true"]{border:3px solid var(--sel);box-shadow:0 0 0 2px var(--panel) inset}
+.ink span{position:absolute;left:6px;bottom:3px;font-family:"DotGothic16",monospace;font-size:13px;background:var(--panel);color:var(--ink);padding:0 4px;border-radius:2px}
+.hint{color:var(--ink-soft);font-size:13px;margin:6px 0 0}
+#sheetWrap{position:relative;width:100%;max-width:512px;aspect-ratio:1/1;border:2px solid var(--ink);background:#000}
+#sheetCv{width:100%;height:100%;display:block;image-rendering:pixelated;cursor:pointer;touch-action:manipulation}
+#selBox{position:absolute;border:2px solid var(--sel);pointer-events:none;box-shadow:0 0 0 1px #fff}
+.side{display:grid;gap:18px}
+#animBoxes{position:absolute;inset:0;pointer-events:none}
+#animBoxes div{position:absolute;border:1px dashed #3CBCFC;box-sizing:border-box}
+#animBoxes div.now{border:2px solid #3CBCFC}
+#animBoxes span{position:absolute;left:1px;top:0;font:10px/1.2 "DotGothic16",monospace;color:#10202F;background:#3CBCFC;padding:0 2px}
+.animLay{display:grid;gap:14px;grid-template-columns:1fr;align-items:start}
+@media (min-width:560px){.animLay{grid-template-columns:auto 1fr}}
+.animStage{display:flex;align-items:center;justify-content:center;min-width:140px;min-height:140px;padding:8px;border:2px solid var(--ink);
+  background:repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0/16px 16px}
+#animCv{image-rendering:pixelated;display:block}
+label.f{display:grid;grid-template-columns:7em 1fr 6.5em;gap:8px;align-items:center;font-size:14px;margin:4px 0}
+label.f output{font-family:"DotGothic16",monospace;text-align:right;font-size:13px}
+label.f input[type=range]{width:100%;accent-color:var(--pencil)}
+.pals{display:grid;gap:6px}
+.pal{display:flex;align-items:center;gap:8px;padding:4px 6px;border:1px solid transparent;border-radius:2px;cursor:pointer;background:none;min-height:40px;width:100%;text-align:left}
+.pal[aria-pressed="true"]{border-color:var(--sel);background:var(--btn)}
+.pal .sw{width:30px;height:24px;border:1px solid var(--line)}
+.pal b{font-family:"DotGothic16",monospace;font-weight:400;min-width:5.5em}
+.nes{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;margin-top:10px;max-width:512px}
+.nes button{min-height:0;aspect-ratio:1/1;padding:0;border:1px solid transparent;border-radius:1px}
+.nes button.cur{outline:2px solid var(--sel);outline-offset:1px;z-index:1}
+.prev{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:6px}
+.prev canvas{image-rendering:pixelated;border:1px solid var(--line);background:var(--checker-a)}
+.prev figure{margin:0;text-align:center;font-size:12px;color:var(--ink-soft)}
+textarea{width:100%;min-height:180px;font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:12px;line-height:1.45;
+  background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:2px;padding:8px;resize:vertical;white-space:pre;overflow:auto}
+#status{min-height:1.6em;font-size:13px;color:var(--ink-soft);margin-top:6px}
+.two{display:grid;gap:18px;grid-template-columns:1fr}
+@media (min-width:1180px){.two{grid-template-columns:auto 1fr}}
+.tabinfo{font-family:"DotGothic16",monospace;font-size:14px;color:var(--ink-soft)}
+input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
+.pngrow{margin-top:8px}
+label.chk{display:inline-flex;align-items:center;gap:6px;font-size:14px;min-height:36px;cursor:pointer}
+label.chk input{width:18px;height:18px;accent-color:var(--pencil)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ドット方眼</h1>
+  <p>ファミコンの 8×8 タイルを 4 色で描いて、.chr と ca65 のコードで書き出すエディタ</p>
+</header>
+<main>
+  <section class="sheet" aria-label="描画">
+    <div class="row" role="toolbar" aria-label="道具">
+      <button id="tPen" aria-pressed="true">ペン<kbd>B</kbd></button>
+      <button id="tFill" aria-pressed="false">塗りつぶし<kbd>G</kbd></button>
+      <button id="tPick" aria-pressed="false">スポイト<kbd>I</kbd></button>
+      <select id="viewSize" aria-label="編集する範囲">
+        <option value="1">1×1 タイル</option>
+        <option value="2" selected>2×2 タイル</option>
+        <option value="4">4×4 タイル</option>
+      </select>
+    </div>
+    <div id="editWrap"><canvas id="edit" width="512" height="512" tabindex="0" aria-label="ドット絵の編集エリア"></canvas></div>
+    <div class="inks" role="group" aria-label="描く色">
+      <button class="ink" data-i="0"><span>0 透明</span></button>
+      <button class="ink" data-i="1"><span>1</span></button>
+      <button class="ink" data-i="2"><span>2</span></button>
+      <button class="ink" data-i="3"><span>3</span></button>
+    </div>
+    <div class="row">
+      <button id="bUndo">戻す<kbd>Ctrl+Z</kbd></button>
+      <button id="bRedo">やり直す<kbd>Ctrl+Y</kbd></button>
+      <button id="bFlipH">左右反転<kbd>H</kbd></button>
+      <button id="bFlipV">上下反転<kbd>V</kbd></button>
+      <button id="bCopy">コピー<kbd>Ctrl+C</kbd></button>
+      <button id="bPaste">貼り付け<kbd>Ctrl+V</kbd></button>
+      <button id="bClear" class="danger">この範囲を消す</button>
+      <button id="bGrid" aria-pressed="true">方眼</button>
+    </div>
+    <p class="hint">色 0 はスプライトでは透明、背景では共通の背景色になります。数字キー 1〜4 で色、矢印キーでタイルを移動できます。</p>
+    <div class="prev" aria-label="実寸プレビュー">
+      <figure><canvas id="pv1"></canvas><figcaption>実寸</figcaption></figure>
+      <figure><canvas id="pv2"></canvas><figcaption>×2</figcaption></figure>
+      <figure><canvas id="pv4"></canvas><figcaption>×4</figcaption></figure>
+    </div>
+  </section>
+
+  <div class="side">
+    <section class="sheet" aria-label="タイル表">
+      <div class="row" style="justify-content:space-between">
+        <h2>タイル表</h2>
+        <span class="tabinfo" id="tileInfo">タイル $00</span>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <button id="tab0" aria-pressed="true">表 0（$0000）</button>
+        <button id="tab1" aria-pressed="false">表 1（$1000）</button>
+      </div>
+      <div id="sheetWrap"><canvas id="sheetCv" width="128" height="128" aria-label="タイル表。クリックで編集するタイルを選ぶ"></canvas><div id="animBoxes" aria-hidden="true"></div><div id="selBox"></div></div>
+      <p class="hint">クリックしたタイルを左上にして、選んだ範囲を編集します。タイル番号 = ASCII コードの並びは教材の chr.s と同じです。</p>
+    </section>
+
+    <section class="sheet" aria-label="アニメーション確認">
+      <h2>アニメーション確認</h2>
+      <div class="animLay">
+        <div class="animStage" id="animStage"><canvas id="animCv" width="16" height="16" aria-label="アニメーションのプレビュー"></canvas></div>
+        <div>
+          <div class="row">
+            <button class="big" id="animPlay" style="font-family:'DotGothic16',monospace">▶ 再生</button>
+            <button id="animPrev" aria-label="前のコマ">◀</button>
+            <button id="animNext" aria-label="次のコマ">▶</button>
+            <span class="tabinfo" id="animInfo"></span>
+          </div>
+          <div class="row" style="margin:6px 0">
+            <button id="animSet">今の選択を1コマ目にする</button>
+            <span class="tabinfo" id="animStart"></span>
+          </div>
+          <label class="f">1コマの大きさ<select id="animSize"><option value="1">1×1 タイル</option><option value="2">2×2 タイル</option><option value="4">4×4 タイル</option></select><span></span></label>
+          <label class="f">コマ数<input type="range" id="animCount" min="1" max="16"><output id="animCountO"></output></label>
+          <label class="f">並び<select id="animDir"><option value="h">横に並ぶ</option><option value="v">縦に並ぶ</option></select><span></span></label>
+          <label class="f">1コマの長さ<input type="range" id="animSpeed" min="1" max="60"><output id="animSpeedO"></output></label>
+          <label class="f">再生のしかた<select id="animMode"><option value="loop">くり返し</option><option value="pingpong">往復</option></select><span></span></label>
+          <label class="f">背景<select id="animBg"><option value="clear">透明（スプライト）</option><option value="pal">色 0（背景色）</option></select><span></span></label>
+          <label class="f">拡大<select id="animScale"><option value="2">×2</option><option value="4">×4</option><option value="6">×6</option><option value="8">×8</option></select><span></span></label>
+        </div>
+      </div>
+      <p class="hint">タイル表で1コマ目の左上のタイルを選んで「今の選択を1コマ目にする」を押すと、そこから横（または縦）に並んだタイルを順にコマとして再生します。端まで来たら次の段（列）に続きます。タイル表の水色の枠がコマの範囲で、数字がコマの順番です。再生しながら描くと、変更がそのまま反映されます。1コマの長さはファミコンの 1/60 秒を単位にしています。</p>
+    </section>
+
+    <section class="sheet" aria-label="パレット">
+      <h2>パレット</h2>
+      <div class="pals" id="pals"></div>
+      <p class="hint">描く色（0〜3）を選んでから下の 64 色をクリックすると、その色を置き換えます。色 0 は 4 つのパレットで共通です。</p>
+      <div class="nes" id="nes" role="group" aria-label="ファミコンの 64 色"></div>
+    </section>
+
+    <section class="sheet" aria-label="読み込みと書き出し">
+      <h2>読み込み・書き出し</h2>
+      <div class="row">
+        <label class="filebtn">.chr / .nes を開く<input type="file" id="fileIn"></label>
+        <button id="bZip">ZIP で保存（.chr + .s）</button>
+        <button id="bCode">選択範囲のコードをコピー</button>
+        <button id="bReset" class="danger">教材のタイルに戻す</button>
+      </div>
+      <div class="row pngrow" role="group" aria-label="PNG で保存">
+        <select id="pngWhat" aria-label="PNG にする範囲"><option value="sel">選択範囲</option><option value="sheet">タイル表（256 枚）</option></select>
+        <select id="pngScale" aria-label="拡大率"><option value="1">×1（素材用）</option><option value="2">×2</option><option value="4" selected>×4</option><option value="8">×8</option></select>
+        <label class="chk"><input type="checkbox" id="pngClear" checked>色 0 を透明に</label>
+        <button id="bPng">PNG で保存</button>
+      </div>
+      <div id="status" role="status" aria-live="polite"></div>
+      <textarea id="code" readonly aria-label="選択範囲の ca65 コード" spellcheck="false"></textarea>
+      <p class="hint">ZIP には graphics.chr（8KB、そのまま <code>.incbin</code> できる）、graphics.s（タイルの絵コメント付き）、palette.s が入っています。PNG は今選んでいるパレットの色で書き出します（×1 はドットがそのままの大きさで、ほかのツールの素材向け）。作業内容はこのブラウザに自動で保存されます。</p>
+    </section>
+  </div>
+</main>
+
+<script>
+(function(){
+"use strict";
+const NES = ["#7C7C7C","#0000FC","#0000BC","#4428BC","#940084","#A80020","#A81000","#881400","#503000","#007800","#006800","#005800","#004058","#000000","#000000","#000000",
+"#BCBCBC","#0078F8","#0058F8","#6844FC","#D800CC","#E40058","#F83800","#E45C10","#AC7C00","#00B800","#00A800","#00A844","#008888","#000000","#000000","#000000",
+"#F8F8F8","#3CBCFC","#6888FC","#9878F8","#F878F8","#F85898","#F87858","#FCA044","#F8B800","#B8F818","#58D854","#58F898","#00E8D8","#787878","#000000","#000000",
+"#FCFCFC","#A4E4FC","#B8B8F8","#D8B8F8","#F8B8F8","#F8A4C0","#F0D0B0","#FCE0A8","#F8D878","#D8F878","#B8F8B8","#B8F8D8","#00FCFC","#F8D8F8","#000000","#000000"];
+const SEED_B64 = "AAAAAAAAAAAAAAAAAAAAABgY50IkZsMAAAAYPBgAAAAA/6pVVSo/AAAAVSoqFQAAAP9VqqpU/AAAAKpUVKgAAAAAAAAAAAAAAAAAAAAAAAABAQH/EBAQ////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOERMVGREOAAAAAAAAAAAABAwEBAQEDgAAAAAAAAAAAA4RAQIECB8AAAAAAAAAAAAfAgQCAREOAAAAAAAAAAAAAgYKEh8CAgAAAAAAAAAAAB8QHgEBEQ4AAAAAAAAAAAAGCBAeEREOAAAAAAAAAAAAHwECBAgICAAAAAAAAAAAAA4REQ4REQ4AAAAAAAAAAAAOEREPAQIMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4RER8REREAAAAAAAAAAAAeEREeEREeAAAAAAAAAAAADhEQEBARDgAAAAAAAAAAABwSEREREhwAAAAAAAAAAAAfEBAeEBAfAAAAAAAAAAAAHxAQHhAQEAAAAAAAAAAAAA4REBcREQ8AAAAAAAAAAAAREREfERERAAAAAAAAAAAADgQEBAQEDgAAAAAAAAAAAAcCAgICEgwAAAAAAAAAAAAREhQYFBIRAAAAAAAAAAAAEBAQEBAQHwAAAAAAAAAAABEbFRUREREAAAAAAAAAAAARERkVExERAAAAAAAAAAAADhERERERDgAAAAAAAAAAAB4RER4QEBAAAAAAAAAAAAAOERERFRINAAAAAAAAAAAAHhERHhQSEQAAAAAAAAAAAA8QEA4BAR4AAAAAAAAAAAAfBAQEBAQEAAAAAAAAAAAAERERERERDgAAAAAAAAAAABERERERCgQAAAAAAAAAAAAREREVFRUKAAAAAAAAAAAAEREKBAoREQAAAAAAAAAAABEREQoEBAQAAAAAAAAAAAAfAQIECBAfAAAAAAAAAAAAA==";
+const DEFAULT_PALS = [[0x0F,0x30,0x10,0x00],[0x0F,0x28,0x38,0x30],[0x0F,0x17,0x27,0x37],[0x0F,0x16,0x27,0x30]];
+const KEY = "dot-hougan-v1";
+
+let chr = new Uint8Array(8192);
+let pals = DEFAULT_PALS.map(p=>p.slice());
+let curPal = 0, ink = 1, tool = "pen", table = 0, sel = 0x01, view = 2, showGrid = true;
+let undoStack = [], redoStack = [], clip = null;
+
+const $ = id => document.getElementById(id);
+const edit = $("edit"), ectx = edit.getContext("2d");
+const sheetCv = $("sheetCv"), sctx = sheetCv.getContext("2d");
+
+function seedChr(){
+  chr = new Uint8Array(8192);
+  const bin = atob(SEED_B64);
+  for(let i=0;i<bin.length;i++) chr[i]=bin.charCodeAt(i);
+}
+function save(){
+  try{
+    let s=""; for(let i=0;i<chr.length;i++) s+=String.fromCharCode(chr[i]);
+    localStorage.setItem(KEY, JSON.stringify({chr:btoa(s),pals,curPal,table,sel,view,anim}));
+  }catch(e){}
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY); if(!raw) return false;
+    const o = JSON.parse(raw); const bin = atob(o.chr);
+    if(bin.length!==8192) return false;
+    for(let i=0;i<8192;i++) chr[i]=bin.charCodeAt(i);
+    const okPal=p=>Array.isArray(p)&&p.length===4&&p.every(c=>Number.isInteger(c)&&c>=0&&c<64);
+    if(Array.isArray(o.pals)&&o.pals.length===4&&o.pals.every(okPal)) pals=o.pals;
+    curPal=(o.curPal|0)&3; table=(o.table|0)&1; sel=(o.sel|0)&255; view=[1,2,4].includes(o.view)?o.view:2;
+    if(o.anim&&typeof o.anim==="object"){ const a=o.anim, ci=(v,lo,hi,d)=>Number.isInteger(v)&&v>=lo&&v<=hi?v:d;
+      const size=[1,2,4].includes(a.size)?a.size:2;
+      anim={table:ci(a.table,0,1,0), size, c:ci(a.c,0,16-size,0), r:ci(a.r,0,16-size,0), count:ci(a.count,1,16,4),
+        dir:a.dir==="v"?"v":"h", speed:ci(a.speed,1,60,8), mode:a.mode==="pingpong"?"pingpong":"loop",
+        bg:a.bg==="pal"?"pal":"clear", scale:[2,4,6,8].includes(a.scale)?a.scale:4}; }
+    return true;
+  }catch(e){ return false; }
+}
+let saveTimer=null;
+function saveSoon(){ clearTimeout(saveTimer); saveTimer=setTimeout(save,400); }
+
+// ---- タイル操作 ----
+function tAddr(t){ return (table*256 + t)*16; }
+function getPx(t,x,y){ const a=tAddr(t); const b=7-x; return ((chr[a+y]>>b)&1) | (((chr[a+8+y]>>b)&1)<<1); }
+function setPx(t,x,y,v){ const a=tAddr(t), m=1<<(7-x);
+  chr[a+y] = (v&1)? chr[a+y]|m : chr[a+y]&~m;
+  chr[a+8+y] = (v&2)? chr[a+8+y]|m : chr[a+8+y]&~m; }
+function origin(){ const c=Math.min(sel%16,16-view), r=Math.min(Math.floor(sel/16),16-view); return {c,r}; }
+function tileAt(tx,ty){ const o=origin(); return (o.r+ty)*16 + (o.c+tx); }
+function vget(px,py){ return getPx(tileAt(px>>3,py>>3),px&7,py&7); }
+function vset(px,py,v){ setPx(tileAt(px>>3,py>>3),px&7,py&7,v); }
+function rgb(i){ return NES[pals[curPal][i]&0x3F]; }
+
+function state(){ return {chr:chr.slice(), pals:pals.map(p=>p.slice())}; }
+function restore(s){ chr=s.chr; pals=s.pals; }
+function snapshot(){ undoStack.push(state()); if(undoStack.length>60) undoStack.shift(); redoStack=[]; }
+
+// ---- 描画 ----
+function drawEdit(){
+  const n=view*8, s=512/n;
+  ectx.clearRect(0,0,512,512);
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+    const v=vget(x,y); if(v===0) continue;
+    ectx.fillStyle=rgb(v); ectx.fillRect(x*s,y*s,s,s);
+  }
+  if(showGrid){
+    const cs=getComputedStyle(document.documentElement);
+    ectx.strokeStyle=cs.getPropertyValue("--grid-strong").trim()||"#9DBFD3"; ectx.lineWidth=1; ectx.globalAlpha=.7;
+    ectx.beginPath();
+    for(let i=1;i<n;i++){ if(i%8===0) continue; const p=Math.round(i*s)+.5; ectx.moveTo(p,0);ectx.lineTo(p,512);ectx.moveTo(0,p);ectx.lineTo(512,p); }
+    ectx.stroke(); ectx.globalAlpha=1;
+  }
+  if(view>1){
+    ectx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--pencil").trim()||"#C8372D"; ectx.lineWidth=2;
+    ectx.beginPath();
+    for(let i=1;i<view;i++){ const p=i*512/view; ectx.moveTo(p,0);ectx.lineTo(p,512);ectx.moveTo(0,p);ectx.lineTo(512,p); }
+    ectx.stroke();
+  }
+}
+function drawSheet(){
+  const img=sctx.createImageData(128,128), d=img.data;
+  const cols=pals[curPal].map(c=>{const h=NES[c&0x3F];return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)];});
+  for(let t=0;t<256;t++){ const bx=(t%16)*8, by=Math.floor(t/16)*8;
+    for(let y=0;y<8;y++) for(let x=0;x<8;x++){ const c=cols[getPx(t,x,y)], o=((by+y)*128+bx+x)*4; d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255; } }
+  sctx.putImageData(img,0,0);
+  const o=origin(), box=$("selBox"), u=100/16;
+  box.style.left=(o.c*u)+"%"; box.style.top=(o.r*u)+"%"; box.style.width=(view*u)+"%"; box.style.height=(view*u)+"%";
+  $("tileInfo").textContent = "タイル $"+hex2(tileAt(0,0))+(view>1?"〜$"+hex2(tileAt(view-1,view-1)):"")+"（表 "+table+"）";
+}
+function drawPreview(){
+  const n=view*8;
+  [["pv1",1],["pv2",2],["pv4",4]].forEach(([id,k])=>{
+    const cv=$(id); cv.width=n; cv.height=n; cv.style.width=(n*k)+"px"; cv.style.height=(n*k)+"px";
+    const c=cv.getContext("2d"); const img=c.createImageData(n,n);
+    for(let y=0;y<n;y++) for(let x=0;x<n;x++){ const v=vget(x,y), h=NES[pals[curPal][v]&0x3F], o=(y*n+x)*4;
+      img.data[o]=parseInt(h.substr(1,2),16); img.data[o+1]=parseInt(h.substr(3,2),16); img.data[o+2]=parseInt(h.substr(5,2),16); img.data[o+3]=255; }
+    c.putImageData(img,0,0);
+  });
+}
+function drawInks(){
+  document.querySelectorAll(".ink").forEach(b=>{ const i=+b.dataset.i;
+    b.style.background=rgb(i); b.setAttribute("aria-pressed", String(i===ink));
+    b.querySelector("span").textContent = (i===0?"0 透明":String(i))+"  $"+hex2(pals[curPal][i]); });
+}
+function drawPals(){
+  const box=$("pals"); box.innerHTML="";
+  pals.forEach((p,pi)=>{
+    const b=document.createElement("button"); b.className="pal"; b.setAttribute("aria-pressed",String(pi===curPal));
+    const label=document.createElement("b"); label.textContent="パレット "+pi; b.appendChild(label);
+    p.forEach(c=>{ const s=document.createElement("span"); s.className="sw"; s.style.background=NES[c&0x3F]; b.appendChild(s); });
+    const t=document.createElement("span"); t.className="dot"; t.style.fontSize="12px"; t.style.color="var(--ink-soft)";
+    t.textContent=p.map(c=>"$"+hex2(c)).join(" "); b.appendChild(t);
+    b.addEventListener("click",()=>{ curPal=pi; refresh(); });
+    box.appendChild(b);
+  });
+  document.querySelectorAll("#nes button").forEach(b=>b.classList.toggle("cur", +b.dataset.c===pals[curPal][ink]));
+}
+function buildNes(){
+  const box=$("nes");
+  for(let i=0;i<64;i++){ const b=document.createElement("button"); b.dataset.c=i; b.style.background=NES[i];
+    b.title="$"+hex2(i); b.setAttribute("aria-label","色 $"+hex2(i));
+    b.addEventListener("click",()=>{
+      if(pals[curPal][ink]===i) return;
+      snapshot();
+      if(ink===0){ pals.forEach(p=>p[0]=i); } else { pals[curPal][ink]=i; }
+      refresh();
+    });
+    box.appendChild(b); }
+}
+function hex2(n){ return n.toString(16).toUpperCase().padStart(2,"0"); }
+
+// ---- アニメーション確認 ----
+let anim={table:0,c:0,r:0,size:2,count:4,dir:"h",speed:8,mode:"loop",bg:"clear",scale:4};
+let animPlaying=false, animIdx=0, animAcc=0, animLast=0, animRaf=0, animBoxKey="";
+function pxT(tb,t,x,y){ const a=(tb*256+t)*16, b=7-x; return ((chr[a+y]>>b)&1)|(((chr[a+8+y]>>b)&1)<<1); }
+function animFrames(){ // 各コマの左上（列・行）
+  const v=anim.size, out=[]; let c=anim.c, r=anim.r;
+  for(let k=0;k<anim.count;k++){
+    if(c+v>16||r+v>16) break;
+    out.push({c,r});
+    if(anim.dir==="h"){ c+=v; if(c+v>16){ c=0; r+=v; } }      // 右へ。端まで来たら次の段の左端へ
+    else { r+=v; if(r+v>16){ r=0; c+=v; } }                  // 下へ。端まで来たら次の列の上端へ
+  }
+  return out;
+}
+function animSeq(){ // 再生する順番（往復なら 0,1,2,3,2,1）
+  const n=animFrames().length, s=[]; for(let i=0;i<n;i++) s.push(i);
+  if(anim.mode==="pingpong") for(let i=n-2;i>0;i--) s.push(i);
+  return s.length?s:[0];
+}
+function drawAnim(){
+  const fr=animFrames(), seq=animSeq(), n=anim.size*8, cv=$("animCv");
+  if(cv.width!==n){ cv.width=n; cv.height=n; }
+  cv.style.width=cv.style.height=(n*anim.scale)+"px";
+  const g=cv.getContext("2d"), img=g.createImageData(n,n);
+  const k=fr.length?seq[animIdx%seq.length]:-1;
+  const cols=pals[curPal].map(c=>{ const h=NES[c&0x3F]; return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]; });
+  if(k>=0){ const f=fr[k];
+    for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+      const v=pxT(anim.table,(f.r+(y>>3))*16+(f.c+(x>>3)),x&7,y&7), o=(y*n+x)*4;
+      if(v===0&&anim.bg==="clear") continue;               // 色0は透明（市松模様が見える）
+      img.data[o]=cols[v][0]; img.data[o+1]=cols[v][1]; img.data[o+2]=cols[v][2]; img.data[o+3]=255; } }
+  g.putImageData(img,0,0);
+  $("animInfo").textContent= fr.length ? "コマ "+(k+1)+" / "+fr.length : "コマがありません";
+  $("animStart").textContent="1コマ目：表 "+anim.table+" のタイル $"+hex2(anim.r*16+anim.c);
+  // タイル表にコマの範囲を描く（同じ表を見ているときだけ）
+  const key=[anim.table,table,k,anim.size,fr.map(f=>f.c+","+f.r).join(" ")].join("|");
+  if(key===animBoxKey) return;                              // 枠が変わらないなら作り直さない
+  animBoxKey=key;
+  const box=$("animBoxes"); box.innerHTML="";
+  if(anim.table!==table) return;
+  const u=100/16;
+  fr.forEach((f,i)=>{ const d=document.createElement("div"); if(i===k) d.className="now";
+    d.style.left=(f.c*u)+"%"; d.style.top=(f.r*u)+"%"; d.style.width=d.style.height=(anim.size*u)+"%";
+    const s=document.createElement("span"); s.textContent=String(i+1); d.appendChild(s); box.appendChild(d); });
+}
+function animTick(ts){
+  if(!animPlaying) return;
+  if(!animLast) animLast=ts;
+  animAcc+=Math.min(ts-animLast,250); animLast=ts;          // タブを戻したときに一気に進まないように
+  const dur=anim.speed*1000/60;
+  while(animAcc>=dur){ animAcc-=dur; animIdx=(animIdx+1)%animSeq().length; }
+  drawAnim();
+  animRaf=requestAnimationFrame(animTick);
+}
+function animStop(){ animPlaying=false; cancelAnimationFrame(animRaf); $("animPlay").textContent="▶ 再生"; }
+function animOutputs(){
+  $("animCountO").textContent=anim.count+" コマ";
+  $("animSpeedO").textContent=anim.speed+"（"+Math.round(anim.speed*1000/60)+"ms）";
+}
+function bindAnim(){
+  $("animSize").value=String(anim.size); $("animCount").value=anim.count; $("animDir").value=anim.dir;
+  $("animSpeed").value=anim.speed; $("animMode").value=anim.mode; $("animBg").value=anim.bg; $("animScale").value=String(anim.scale);
+  animOutputs();
+  const ch=()=>{ animIdx=0; animOutputs(); drawAnim(); saveSoon(); };
+  $("animSize").onchange=e=>{ anim.size=+e.target.value; anim.c=Math.min(anim.c,16-anim.size); anim.r=Math.min(anim.r,16-anim.size); ch(); };
+  $("animCount").oninput=e=>{ anim.count=+e.target.value; ch(); };
+  $("animDir").onchange=e=>{ anim.dir=e.target.value; ch(); };
+  $("animSpeed").oninput=e=>{ anim.speed=+e.target.value; animOutputs(); saveSoon(); };
+  $("animMode").onchange=e=>{ anim.mode=e.target.value; ch(); };
+  $("animBg").onchange=e=>{ anim.bg=e.target.value; drawAnim(); saveSoon(); };
+  $("animScale").onchange=e=>{ anim.scale=+e.target.value; drawAnim(); saveSoon(); };
+  $("animSet").onclick=()=>{ const o=origin(); anim.table=table; anim.size=view; anim.c=o.c; anim.r=o.r;
+    $("animSize").value=String(view); animIdx=0; drawAnim(); saveSoon(); };
+  $("animPlay").onclick=()=>{ if(animPlaying){ animStop(); return; }
+    animPlaying=true; animLast=0; animAcc=0; $("animPlay").textContent="■ 停止"; animRaf=requestAnimationFrame(animTick); };
+  $("animPrev").onclick=()=>{ animStop(); const n=animSeq().length; animIdx=(animIdx-1+n)%n; drawAnim(); };
+  $("animNext").onclick=()=>{ animStop(); animIdx=(animIdx+1)%animSeq().length; drawAnim(); };
+}
+
+function tileCode(t){
+  const lines=["; タイル $"+hex2(t)];
+  const p0=[],p1=[];
+  for(let y=0;y<8;y++){ let s=""; for(let x=0;x<8;x++){ const v=getPx(t,x,y); s+= v?String(v):"."; }
+    lines.push(";   "+s); p0.push(chr[tAddr(t)+y]); p1.push(chr[tAddr(t)+8+y]); }
+  const b=a=>a.map(v=>"%"+v.toString(2).padStart(8,"0")).join(", ");
+  lines.push("    .byte "+b(p0)+"  ; プレーン0");
+  lines.push("    .byte "+b(p1)+"  ; プレーン1");
+  return lines.join("\n");
+}
+function selectionCode(){
+  const out=["; ドット方眼で作成（表 "+table+"）"]; 
+  for(let ty=0;ty<view;ty++) for(let tx=0;tx<view;tx++) out.push(tileCode(tileAt(tx,ty)));
+  return out.join("\n");
+}
+function refresh(){ drawEdit(); drawSheet(); drawPreview(); drawInks(); drawPals(); drawAnim(); $("code").value=selectionCode(); saveSoon(); }
+
+// ---- 編集エリアの操作 ----
+let drawing=false, lastPx=null;
+function evPx(e){ const r=edit.getBoundingClientRect(), n=view*8;
+  const x=Math.floor((e.clientX-r.left)/r.width*n), y=Math.floor((e.clientY-r.top)/r.height*n);
+  if(x<0||y<0||x>=n||y>=n) return null; return [x,y]; }
+function line(a,b,f){ let [x0,y0]=a,[x1,y1]=b; const dx=Math.abs(x1-x0),dy=-Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1; let err=dx+dy;
+  for(;;){ f(x0,y0); if(x0===x1&&y0===y1) break; const e2=2*err; if(e2>=dy){err+=dy;x0+=sx;} if(e2<=dx){err+=dx;y0+=sy;} } }
+function flood(x,y,v){ const n=view*8, from=vget(x,y); if(from===v) return; const st=[[x,y]];
+  while(st.length){ const [cx,cy]=st.pop(); if(cx<0||cy<0||cx>=n||cy>=n||vget(cx,cy)!==from) continue; vset(cx,cy,v);
+    st.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } }
+edit.addEventListener("pointerdown",e=>{
+  if(e.button!==0) return;
+  const p=evPx(e); if(!p) return; e.preventDefault();
+  if(tool==="pick"){ ink=vget(p[0],p[1]); setTool("pen"); refresh(); return; }
+  if(tool==="fill"){ if(vget(p[0],p[1])===ink) return; snapshot(); flood(p[0],p[1],ink); refresh(); return; }
+  snapshot();
+  drawing=true; lastPx=p; edit.setPointerCapture(e.pointerId); vset(p[0],p[1],ink); drawEdit();
+});
+edit.addEventListener("pointermove",e=>{ if(!drawing) return; const p=evPx(e); if(!p) return;
+  line(lastPx,p,(x,y)=>vset(x,y,ink)); lastPx=p; drawEdit(); });
+function endDraw(){ if(!drawing) return; drawing=false; refresh(); }
+edit.addEventListener("pointerup",endDraw); edit.addEventListener("pointercancel",endDraw);
+
+// ---- タイル表の操作 ----
+sheetCv.addEventListener("click",e=>{ const r=sheetCv.getBoundingClientRect();
+  const c=Math.floor((e.clientX-r.left)/r.width*16), rr=Math.floor((e.clientY-r.top)/r.height*16);
+  if(c<0||rr<0||c>15||rr>15) return; sel=rr*16+c; refresh(); });
+
+// ---- ボタン ----
+function setTool(t){ tool=t; [["tPen","pen"],["tFill","fill"],["tPick","pick"]].forEach(([id,n])=>$(id).setAttribute("aria-pressed",String(n===t))); }
+$("tPen").onclick=()=>setTool("pen"); $("tFill").onclick=()=>setTool("fill"); $("tPick").onclick=()=>setTool("pick");
+$("viewSize").onchange=e=>{ view=+e.target.value; refresh(); };
+document.querySelectorAll(".ink").forEach(b=>b.addEventListener("click",()=>{ ink=+b.dataset.i; refresh(); }));
+function undo(){ if(!undoStack.length) return; redoStack.push(state()); restore(undoStack.pop()); refresh(); }
+function redo(){ if(!redoStack.length) return; undoStack.push(state()); restore(redoStack.pop()); refresh(); }
+$("bUndo").onclick=undo; $("bRedo").onclick=redo;
+function flip(h){ snapshot(); const n=view*8, buf=[]; for(let y=0;y<n;y++){buf.push([]);for(let x=0;x<n;x++)buf[y].push(vget(x,y));}
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++) vset(x,y, h?buf[y][n-1-x]:buf[n-1-y][x]); refresh(); }
+$("bFlipH").onclick=()=>flip(true); $("bFlipV").onclick=()=>flip(false);
+function copySel(){ const n=view*8; clip={n,px:[]}; for(let y=0;y<n;y++)for(let x=0;x<n;x++) clip.px.push(vget(x,y)); status("コピーしました（"+view+"×"+view+" タイル）"); }
+function pasteSel(){ if(!clip) { status("先にコピーしてください"); return; } snapshot(); const n=view*8;
+  for(let y=0;y<Math.min(n,clip.n);y++)for(let x=0;x<Math.min(n,clip.n);x++) vset(x,y,clip.px[y*clip.n+x]); refresh(); status("貼り付けました"); }
+$("bCopy").onclick=copySel; $("bPaste").onclick=pasteSel;
+function armed(btn,msg,fn){ if(btn.classList.contains("armed")){ btn.classList.remove("armed"); btn.textContent=btn.dataset.label; fn(); return; }
+  btn.dataset.label=btn.textContent; btn.classList.add("armed"); btn.textContent=msg;
+  setTimeout(()=>{ if(btn.classList.contains("armed")){ btn.classList.remove("armed"); btn.textContent=btn.dataset.label; } },3000); }
+$("bClear").onclick=function(){ armed(this,"もう一度押すと消去",()=>{ snapshot(); const n=view*8; for(let y=0;y<n;y++)for(let x=0;x<n;x++) vset(x,y,0); refresh(); }); };
+$("bReset").onclick=function(){ armed(this,"もう一度押すと全部置き換え",()=>{ snapshot(); seedChr(); pals=DEFAULT_PALS.map(p=>p.slice()); refresh(); status("教材のタイルに戻しました（戻すで取り消せます）"); }); };
+$("bGrid").onclick=()=>{ showGrid=!showGrid; $("bGrid").setAttribute("aria-pressed",String(showGrid)); drawEdit(); };
+function setTable(t){ table=t; $("tab0").setAttribute("aria-pressed",String(t===0)); $("tab1").setAttribute("aria-pressed",String(t===1)); refresh(); }
+$("tab0").onclick=()=>setTable(0); $("tab1").onclick=()=>setTable(1);
+function status(s){ $("status").textContent=s; }
+
+$("bCode").onclick=async()=>{ const ta=$("code"); ta.value=selectionCode();
+  try{ await navigator.clipboard.writeText(ta.value); status("コードをコピーしました。chr.s に貼り付けて使えます"); }
+  catch(e){ ta.focus(); ta.select(); status("自動コピーできませんでした。選択済みのテキストを Ctrl+C でコピーしてください"); } };
+
+// ---- 読み込み ----
+$("fileIn").addEventListener("change",async e=>{
+  const f=e.target.files[0]; if(!f) return; const buf=new Uint8Array(await f.arrayBuffer()); e.target.value="";
+  let data=buf;
+  if(buf.length>=16 && buf[0]===0x4E&&buf[1]===0x45&&buf[2]===0x53&&buf[3]===0x1A){
+    const prg=buf[4]*16384, chrn=buf[5]*8192, trainer=(buf[6]&4)?512:0;
+    if(chrn===0){ status("この .nes には CHR-ROM がありません（CHR-RAM 方式の ROM です）"); return; }
+    data=buf.subarray(16+trainer+prg, 16+trainer+prg+8192);
+  }
+  if(data.length<16){ status("読み込めるタイルがありません"); return; }
+  snapshot(); chr=new Uint8Array(8192); chr.set(data.subarray(0,8192));
+  refresh(); status(f.name+" を読み込みました（"+Math.min(data.length,8192)+" バイト）"
+    +(data.length<8192?"。足りない分は空白です":data.length>8192?"。8KB を超えた分は読み込んでいません":""));
+});
+
+// ---- 書き出し（ZIP） ----
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC[(c^u8[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  const enc=new TextEncoder(), parts=[], central=[]; let off=0;
+  const u16=v=>[v&255,(v>>8)&255], u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255];
+  files.forEach(f=>{ const name=enc.encode(f.name), data=f.data instanceof Uint8Array?f.data:enc.encode(f.data), crc=crc32(data);
+    const lh=new Uint8Array([...u32(0x04034b50),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)]);
+    parts.push(lh,name,data);
+    central.push(new Uint8Array([...u32(0x02014b50),...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),name);
+    off+=lh.length+name.length+data.length; });
+  const csize=central.reduce((a,b)=>a+b.length,0);
+  const end=new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(csize),...u32(off),...u16(0)]);
+  return new Blob([...parts,...central,end],{type:"application/zip"});
+}
+function fullSource(){
+  const out=["; ================================================================","; graphics.s  ドット方眼で作成した CHR-ROM（8KB）",
+    "; 使い方: .include \"graphics.s\"（教材の chr.s の代わり）","; ================================================================",'.segment "CHARS"'];
+  const saveT=table; let gap=0;
+  for(let tb=0;tb<2;tb++){ table=tb; out.push("; ---- パターンテーブル "+tb+"（$"+(tb?"1000":"0000")+"） ----");
+    for(let t=0;t<256;t++){ const a=tAddr(t); let empty=true; for(let i=0;i<16;i++) if(chr[a+i]){empty=false;break;}
+      if(empty){ gap++; continue; } if(gap){ out.push("    .res "+(gap*16)+", 0   ; 空白タイル "+gap+" 枚"); gap=0; } out.push(tileCode(t)); }
+    if(gap){ out.push("    .res "+(gap*16)+", 0   ; 空白タイル "+gap+" 枚"); gap=0; } }
+  table=saveT; return out.join("\n")+"\n";
+}
+function paletteSource(){
+  return ["; palette.s  ドット方眼のパレット（教材では背景・スプライトの両方に使える）","palette_set:",
+    ...pals.map((p,i)=>"    .byte "+p.map(c=>"$"+hex2(c)).join(",")+"   ; パレット "+i)].join("\n")+"\n";
+}
+let dl=null;
+async function saveFile(filename,data){
+  if(!dl){ status("このページではファイル保存が使えません。コードのコピーを使ってください"); return; }
+  try{ const r=await dl.save({filename,data}); status(r&&r.status==="delivered"?"送りました":"保存しました："+filename); }
+  catch(err){ const c=err&&err.code;
+    status(c==="declined"?"保存をキャンセルしました"
+      :c==="rate_limited"?"保存の確認が開いています。少し待ってから押してください"
+      :c==="too_large"?"ファイルが大きすぎます。拡大率を下げてください"
+      :(c==="rejected_extension"||c==="extension_not_enabled")?"この形式はここでは保存できません"
+      :"保存できませんでした（"+(c||"不明なエラー")+"）"); }
+}
+$("bZip").onclick=()=>saveFile("dot-hougan-graphics.zip",
+  makeZip([{name:"graphics.chr",data:chr.slice()},{name:"graphics.s",data:fullSource()},{name:"palette.s",data:paletteSource()}]));
+
+// ---- 書き出し（PNG：4色のインデックスカラー） ----
+function u32be(v){ return [(v>>>24)&255,(v>>>16)&255,(v>>>8)&255,v&255]; }
+function pngChunk(type,data){ const td=new Uint8Array(4+data.length); for(let i=0;i<4;i++) td[i]=type.charCodeAt(i); td.set(data,4);
+  return [new Uint8Array(u32be(data.length)), td, new Uint8Array(u32be(crc32(td)))]; }
+function zlibStored(d){ // 圧縮なしの zlib（CompressionStream が無いとき用）
+  const blocks=Math.max(1,Math.ceil(d.length/65535)), out=new Uint8Array(2+d.length+blocks*5+4); let o=0;
+  out[o++]=0x78; out[o++]=0x01;
+  for(let b=0;b<blocks;b++){ const s=b*65535, len=Math.min(65535,d.length-s);
+    out[o++]=b===blocks-1?1:0; out[o++]=len&255; out[o++]=len>>8; out[o++]=~len&255; out[o++]=(~len>>8)&255;
+    out.set(d.subarray(s,s+len),o); o+=len; }
+  let a=1,b2=0; for(let i=0;i<d.length;i++){ a=(a+d[i])%65521; b2=(b2+a)%65521; }
+  out.set(u32be(((b2<<16)|a)>>>0),o); return out; }
+async function zlib(d){
+  if(typeof CompressionStream!=="undefined"){
+    try{ const s=new Blob([d]).stream().pipeThrough(new CompressionStream("deflate")); return new Uint8Array(await new Response(s).arrayBuffer()); }catch(e){} }
+  return zlibStored(d); }
+async function makePng(w,h,idx,palRgb,clear0){
+  const raw=new Uint8Array((w+1)*h);
+  for(let y=0;y<h;y++){ raw[y*(w+1)]=0; raw.set(idx.subarray(y*w,(y+1)*w),y*(w+1)+1); }
+  const ihdr=new Uint8Array([...u32be(w),...u32be(h),8,3,0,0,0]);   // 8bit インデックスカラー
+  const plte=new Uint8Array(palRgb.flat());
+  const parts=[new Uint8Array([137,80,78,71,13,10,26,10]), ...pngChunk("IHDR",ihdr), ...pngChunk("PLTE",plte)];
+  if(clear0) parts.push(...pngChunk("tRNS",new Uint8Array([0])));    // 色0だけ透明
+  parts.push(...pngChunk("IDAT",await zlib(raw)), ...pngChunk("IEND",new Uint8Array(0)));
+  return new Blob(parts,{type:"image/png"});
+}
+function pngPixels(what,k){ // 色番号の並び（拡大済み）を作る
+  const n= what==="sheet"?128:view*8, w=n*k, idx=new Uint8Array(w*w);
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+    const v= what==="sheet"? getPx((y>>3)*16+(x>>3),x&7,y&7) : vget(x,y);
+    if(!v) continue;
+    for(let dy=0;dy<k;dy++) idx.fill(v,(y*k+dy)*w+x*k,(y*k+dy)*w+x*k+k);
+  }
+  return {w,idx};
+}
+$("bPng").onclick=async()=>{
+  const what=$("pngWhat").value, k=+$("pngScale").value, clear0=$("pngClear").checked;
+  const {w,idx}=pngPixels(what,k);
+  const palRgb=pals[curPal].map(c=>{ const h=NES[c&0x3F]; return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]; });
+  const blob=await makePng(w,w,idx,palRgb,clear0);
+  const name= what==="sheet" ? "dot-hougan-table"+table+"-x"+k+".png"
+    : "dot-hougan-tile"+hex2(tileAt(0,0))+"-"+view+"x"+view+"-x"+k+".png";
+  saveFile(name,blob);
+};
+
+// ---- キーボード ----
+document.addEventListener("keydown",e=>{
+  const tg=e.target.tagName; if(tg==="TEXTAREA"||tg==="SELECT"||tg==="INPUT") return;
+  const k=e.key, ctrl=e.ctrlKey||e.metaKey;
+  if(ctrl&&(k==="z"||k==="Z")){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
+  if(ctrl&&(k==="y"||k==="Y")){ e.preventDefault(); redo(); return; }
+  if(ctrl&&(k==="c"||k==="C")){ if(window.getSelection().toString()) return; e.preventDefault(); copySel(); return; }
+  if(ctrl&&(k==="v"||k==="V")){ e.preventDefault(); pasteSel(); return; }
+  if(ctrl) return;
+  if(k>="1"&&k<="4"){ ink=+k-1; refresh(); return; }
+  const m={b:"pen",g:"fill",i:"pick"}[k.toLowerCase()]; if(m){ setTool(m); return; }
+  if((k==="h"||k==="H")&&!e.repeat){ flip(true); return; } if((k==="v"||k==="V")&&!e.repeat){ flip(false); return; }
+  const mv={ArrowLeft:-1,ArrowRight:1,ArrowUp:-16,ArrowDown:16}[k];
+  if(mv!==undefined){ e.preventDefault(); const o=origin(); let t=o.r*16+o.c+mv; if(t<0||t>255) return;
+    if((mv===-1&&o.c===0)||(mv===1&&o.c+view>=16)||(mv===-16&&o.r===0)||(mv===16&&o.r+view>=16)) return; sel=t; refresh(); }
+});
+
+// ---- 起動 ----
+buildNes();
+if(!load()){ seedChr(); const o=origin(); anim.table=table; anim.c=o.c; anim.r=o.r; anim.size=view; }
+bindAnim();
+$("viewSize").value=String(view);
+setTable(table);
+(async()=>{ try{ if(window.claude&&window.claude.use) dl=await window.claude.use("downloads"); }catch(e){ dl=null; }
+  if(!dl){ $("bZip").title=$("bPng").title="このページではファイル保存が使えません"; } })();
+
+
+})();
+</script>
+</body>
+</html>
